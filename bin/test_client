@@ -1,0 +1,32 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# add lib to libpath (only needed when running from the sources)
+require 'pathname'
+lib_path = File.expand_path('../../lib', Pathname.new(__FILE__).realpath)
+$LOAD_PATH.unshift lib_path unless $LOAD_PATH.include?(lib_path)
+
+STDOUT.sync = true
+
+require 'sensor_api/protocol'
+require 'socket'
+
+logger = Logger.new($stdout)
+
+threads = []
+30.times do
+  threads << Thread.new do
+    100.times do
+      begin
+        socket = UDPSocket.new
+        socket.send(SensorAPI::Protocol::SensorReport.new(sensor_id: 1, device_id: 2, f: (rand(240) / (rand(2)+1)).to_f).to_proto, 0, '127.0.0.1', 5683)
+        data, client = socket.recvfrom(128)
+        response = SensorAPI::Protocol::ServerResponse.decode(data)
+        logger.info response.inspect
+      rescue => ex
+        logger.error ex
+      end
+    end
+  end
+end
+threads.map(&:join)
