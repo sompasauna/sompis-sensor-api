@@ -15,7 +15,7 @@ $ docker build -t sompisapi .
 #### Run
 
 ```
-$ docker run -e REPORT_API_KEY=xyz sompisapi
+$ docker run -e REPORT_API_KEY=xyz -p 8000:8000/udp sompisapi
 ```
 
 ### Ruby
