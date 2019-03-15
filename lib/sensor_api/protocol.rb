@@ -39,3 +39,63 @@ class SensorReport
     end
   end
 end
+
+require 'zlib'
+
+module SensorAPI
+  module Protocol
+    module MultiSensorReport
+      def decode_multi(msg)
+        reports = []
+        idx = 0
+        until idx >= msg.size
+          doc_bytes = msg.bytes[idx]
+          idx += 1
+          begin
+            report = SensorReport.decode(msg[idx, doc_bytes])
+            if block_given?
+              yield report
+            else
+              reports << report
+            end
+          rescue StandardError => ex
+            puts "Error decoding message: #{ex.class.name} : #{ex.message}}\n#{ex.backtrace.join("\n  ")}"
+          end
+          idx += doc_bytes
+        end
+        block_given? ? nil : reports
+      end
+      module_function :decode_multi
+    end
+
+    module Encryption
+      raise "PASSPHRASE missing" unless ENV['PASSPHRASE']
+      PASSPHRASE = ENV['PASSPHRASE'].bytes.freeze
+      PP_SIZE = PASSPHRASE.size
+      raise "PASSPHRASE2 missing" unless ENV['PASSPHRASE2']
+      PASSPHRASE2 = ENV['PASSPHRASE2'].freeze
+
+      def xor(bytes)
+        bytes.each_with_object(+'').with_index { |(b, o), i| o << (b ^ PASSPHRASE[i % PP_SIZE]).chr }
+      end
+      module_function :xor
+
+      def silly_encrypt(msg)
+        xorred = xor(msg.bytes)
+        padded = "#{xorred}#{PASSPHRASE2}"
+        xorred + [Zlib.crc32(padded)].pack('N')
+      end
+      module_function :silly_encrypt
+
+      def silly_decrypt(msg)
+        without_crc, crc_bytes = msg.bytes.each_slice(msg.bytesize - 4).to_a
+        crc = crc_bytes.pack('C*').unpack('N').first
+        padded_crc = Zlib.crc32("#{without_crc.pack('C*')}#{PASSPHRASE2}")
+        puts crc.inspect
+        puts padded_crc.inspect
+        crc == padded_crc ? xor(without_crc) : nil
+      end
+      module_function :silly_decrypt
+    end
+  end
+end

@@ -19,20 +19,16 @@ module SensorAPI
       Socket.udp_server_loop(LISTEN_PORT) do |msg, msg_src|
         logger.debug { "Received message from %s : %s" % [msg_src, msg] }
         unless msg.nil? || (msg.respond_to?(:zero?) && msg.zero?) || (msg.respond_to?(:empty?) && msg.empty?)
-          begin
-            sensor_report = SensorReport.decode(msg)
-          rescue StandardError => ex
-            logger.error "Failed to decode message"
+          SensorAPI::Protocol::MultiSensorReport.decode_multi(msg) do |report|
+            logger.info report.inspect
+            #logger.info report.send_to_www_api
           end
 
-          logger.info sensor_report.inspect
           response = {}
           response[:goto_sleep_seconds] = (1..13).cover?(Time.now.hour) ? 300 : 60
           # possible to ask to upgrade firmware from URL:
           # response[:firmware_url] = "http://xyz/fw20171128.bin"
           msg_src.reply(ServerResponse.new(response).to_proto)
-
-          #logger.info sensor_report.send_to_www_api
         end
       end
     end
